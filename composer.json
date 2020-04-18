@@ -1,0 +1,26 @@
+{
+    "name": "rir/neuroscan-parser",
+    "description": "Parsing Neuroscan XML report data",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Andrey Toropin",
+            "email": "at@rusatom.dev"
+        }
+    ],
+    "require": {
+        "guzzlehttp/guzzle": "^6.3"
+    },
+    "autoload": {
+        "psr-4": {
+            "Rir\\Neuroscan\\": ""
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Rir\\Neuroscan\\NeuroscanServiceProvider"
+            ]
+        }
+    }
+}
