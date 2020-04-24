@@ -63,31 +63,26 @@ class NeuroscanParseCommand extends Command
         $dateFrom = date('Y-m-d 00:00:00');
         $dateTo   = date('Y-m-d 23:59:59');
 
-        $offset = 0;
-        do {
-            $exportData = $this->getExportData($sessionId, $offset, $dateFrom, $dateTo);
-            $exportData = new \SimpleXMLElement($exportData);
+        $visitorsCounts = $this->getVisitorsCounts($sessionId, $dateFrom, $dateTo);
 
-            $cameraIds[] = array_map("strval", $exportData->xpath("/faces/face/CameraID"));
-            $cameraIdsMerged = array_merge([], ...$cameraIds);
-
-            $offset += 100;
-        } while ($exportData->count() >= 100);
-
-        $visitorsCounts = array_count_values($cameraIdsMerged);
         $placesCameras = $this->getPlacesCamerasIds();
+
+        /** Reset the counter if data is empty (new day) */
+        if (empty($visitorsCounts)) {
+            $model = new $this->targetClass();
+            $model::whereIn('id', array_values(array_unique($placesCameras)))->update(['visitors' => 0]);
+            return;
+        }
 
         $placesCameraArr = array_intersect_key($placesCameras, $visitorsCounts);
         $visitorsCountsArr = array_intersect_key($visitorsCounts, $placesCameras);
 
-        $visitorsPlaces = array_combine($visitorsCountsArr, $placesCameraArr);
-
         $placesVisitors = [];
-        array_walk_recursive($visitorsPlaces, function($value, $key) use (&$placesVisitors) {
+        array_walk_recursive($placesCameraArr, function($value, $key) use (&$placesVisitors, $visitorsCountsArr) {
             if (!isset($placesVisitors[$value])) {
-                $placesVisitors[$value] = $key;
+                $placesVisitors[$value] = $visitorsCountsArr[$key];
             } else {
-                $placesVisitors[$value] += $key;
+                $placesVisitors[$value] += $visitorsCountsArr[$key];
             }
         });
 
@@ -99,28 +94,20 @@ class NeuroscanParseCommand extends Command
         $this->info('Completed.');
     }
 
-    private function getSessionID()
+    private function getVisitorsCounts($sessionId, $dateFrom, $dateTo)
     {
-        try {
-            $response = $this->client->post(
-                $this->loginUrl, [
-                'form_params' => [
-                    'Login'    => $this->login,
-                    'Password' => $this->password
-                ]
-            ])
-                ->getBody()
-                ->getContents();
-        } catch (RequestException $e) {
-            if ($e->hasResponse()) {
-                $exception = (string)$e->getResponse()->getBody();
-                return json_decode($exception);
-            } else {
-                return $e->getMessage();
-            }
-        }
+        $offset = 0;
+        do {
+            $exportData = $this->getExportData($sessionId, $offset, $dateFrom, $dateTo);
+            $exportData = new \SimpleXMLElement($exportData);
 
-        return optional(json_decode($response))->SessionID;
+            $cameraIds[] = array_map("strval", $exportData->xpath("/faces/face/CameraID"));
+            $cameraIdsMerged = array_merge([], ...$cameraIds);
+
+            $offset += 100;
+        } while ($exportData->count() >= 100);
+
+        return array_count_values($cameraIdsMerged);
     }
 
     private function getExportData($sessionId, $offset, $dateFrom, $dateTo)
@@ -149,6 +136,30 @@ class NeuroscanParseCommand extends Command
         }
 
         return $response;
+    }
+
+    private function getSessionID()
+    {
+        try {
+            $response = $this->client->post(
+                $this->loginUrl, [
+                'form_params' => [
+                    'Login'    => $this->login,
+                    'Password' => $this->password
+                ]
+            ])
+                ->getBody()
+                ->getContents();
+        } catch (RequestException $e) {
+            if ($e->hasResponse()) {
+                $exception = (string)$e->getResponse()->getBody();
+                return json_decode($exception);
+            } else {
+                return $e->getMessage();
+            }
+        }
+
+        return optional(json_decode($response))->SessionID;
     }
 
     /** Some hardcode here ;] */
